@@ -1,4 +1,5 @@
 import streamlit as st
+from datetime import date
 
 st.set_page_config(page_title='Auditoría ELA | Edaravona', layout='centered')
 
@@ -42,8 +43,7 @@ diagnostico = st.selectbox('ELA definida o probable según criterios revisados d
 edad = st.number_input('Edad (años)', min_value=0, max_value=120, value=None, step=1)
 meses = st.number_input('Meses desde el primer síntoma de ELA', min_value=0, max_value=600, value=None, step=1)
 cvf = st.number_input('Capacidad vital forzada (% del valor predicho)', min_value=0.0, max_value=200.0, value=None, step=1.0)
-progresion = st.number_input('Descenso de ALSFRS-R durante las 12 semanas previas (puntos)', min_value=0, max_value=48, value=None, step=1)
-st.caption('La progresión requiere dos evaluaciones funcionales comparables.')
+st.caption('La progresión se calculará a partir de dos evaluaciones fechadas. El puntaje actual se obtiene de los 12 ítems de la sección 3.')
 
 st.header('2. Clasificación japonesa de gravedad')
 grados = {
@@ -70,6 +70,34 @@ if completa:
 else:
     respiratorio_concordante = None
     st.info('Completar los 12 ítems para calcular la puntuación total.')
+
+st.subheader('3.1. Evolución temporal de ALSFRS-R')
+st.caption('Consignar la evaluación previa y las fechas de ambas mediciones. No se extrapola una progresión observada en otro intervalo a 12 semanas.')
+puntaje_previo = st.number_input('ALSFRS-R previa (0–48 puntos)', min_value=0, max_value=48, value=None, step=1)
+fecha_previa_disponible = st.checkbox('Dispongo de la fecha de la evaluación previa')
+fecha_previa = st.date_input('Fecha de ALSFRS-R previa', value=date.today(), max_value=date.today(), format='DD/MM/YYYY') if fecha_previa_disponible else None
+fecha_actual_disponible = st.checkbox('Dispongo de la fecha de la evaluación actual')
+fecha_actual = st.date_input('Fecha de ALSFRS-R actual', value=date.today(), max_value=date.today(), format='DD/MM/YYYY') if fecha_actual_disponible else None
+
+def evaluar_progresion(puntaje_previo, puntajes, fecha_previa, fecha_actual):
+    if puntaje_previo is None or not all(isinstance(p, int) for p in puntajes) or fecha_previa is None or fecha_actual is None:
+        return None, None, None, 'Faltan puntajes o fechas para evaluar la progresión.'
+    dias = (fecha_actual - fecha_previa).days
+    descenso = puntaje_previo - sum(puntajes)
+    if dias <= 0:
+        return None, descenso, dias, 'Las fechas son inconsistentes: la evaluación actual debe ser posterior a la previa.'
+    if descenso < 0:
+        return None, descenso, dias, 'El puntaje actual supera al previo: no se documenta descenso; revisar las mediciones.'
+    if dias != 84:
+        return None, descenso, dias, 'Intervalo diferente de 12 semanas (84 días): progresión documentada, pero concordancia temporal con el criterio del ensayo no verificable directamente.'
+    if 1 <= descenso <= 4:
+        return True, descenso, dias, 'Descenso de 1–4 puntos en 12 semanas: concordante con el criterio de progresión.'
+    return False, descenso, dias, 'El descenso en 12 semanas no está entre 1 y 4 puntos.'
+
+progresion_concordante, descenso_observado, dias_observados, mensaje_progresion = evaluar_progresion(puntaje_previo, puntajes, fecha_previa, fecha_actual)
+if descenso_observado is not None and dias_observados is not None and dias_observados > 0:
+    st.write(f'**Cambio observado:** {descenso_observado} puntos de descenso en {dias_observados} días ({dias_observados / 7:.1f} semanas).')
+st.info(mensaje_progresion)
 
 st.header('4. Evaluación clínica de seguridad')
 st.caption('El antecedente conocido de hipersensibilidad a edaravona o excipientes es una contraindicación. No se pregunta de rutina; si consta en la documentación, debe señalarse al auditor.')
@@ -102,7 +130,7 @@ if st.button('Evaluar', type='primary', use_container_width=True):
         'CVF ≥80 % del predicho': None if cvf is None else cvf >= 80,
         'ALSFRS-R ≥2 en todos los ítems': None if not completa else min(puntajes) >= 2,
         'ALSFRS-R respiratorio: 4 puntos en los tres ítems': respiratorio_concordante,
-        'Descenso ALSFRS-R de 1–4 puntos en 12 semanas': None if progresion is None else 1 <= progresion <= 4,
+        'Descenso ALSFRS-R de 1–4 puntos en 12 semanas': progresion_concordante,
         'Clasificación japonesa grado 1–2': None if grado is None else grado in (1, 2),
     }
     st.subheader('6.1. Concordancia con MCI186-19')
@@ -118,6 +146,7 @@ if st.button('Evaluar', type='primary', use_container_width=True):
         st.success('Concordante con los criterios clínicos seleccionados del ensayo.')
     if faltantes:
         st.write('**Criterios pendientes:**', ', '.join(faltantes))
+    st.write('**Evaluación de progresión:**', mensaje_progresion)
 
     st.subheader('6.2. Seguridad por presentación')
     contra = []
