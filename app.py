@@ -1,103 +1,9 @@
-import streamlit as st
-from datetime import date
-
-st.set_page_config(page_title='Auditoría ELA | Edaravona', layout='centered')
-
-ESTUDIO_URL = 'https://pubmed.ncbi.nlm.nih.gov/28522181/'
-CLASIFICACION_URL = 'https://www.ncbi.nlm.nih.gov/books/NBK542356/'
-PRODUCTOS = {
-    'Elavone® — intravenosa': {'renal': 'cualquiera', 'fuente': 'https://elea.com/uploads/PROSPECTOS/ELAVONE-Propecto.pdf'},
-    'Edaracut® — intravenosa': {'renal': 'cualquiera', 'fuente': 'https://boletin.anmat.gob.ar/junio_2024/Dispo_5555-24.pdf'},
-    'Edaranovag® — intravenosa': {'renal': 'cualquiera', 'fuente': None},
-    'Antixan® — intravenosa': {'renal': 'severa', 'fuente': 'https://bioprofarma-bago.com.ar/wp-content/uploads/2025/12/Prospecto-Antixan-21-07-21-1.pdf'},
-    'Antixan Oral® — suspensión oral': {'renal': 'precaucion', 'fuente': None},
-}
-OPCIONES = ['Sin dato', 'Sí', 'No']
-
-def si_no(valor):
-    return None if valor == 'Sin dato' else valor == 'Sí'
-
-def mostrar_criterio(nombre, resultado):
-    if resultado is None:
-        st.write(f'⚪ **{nombre}:** Sin dato')
-    elif resultado:
-        st.write(f'✅ **{nombre}:** Cumple')
-    else:
-        st.write(f'❌ **{nombre}:** No cumple')
-
-st.title('Auditoría médica | Edaravona en ELA')
-st.caption('Prototipo de apoyo a auditoría. Utilizar exclusivamente datos ficticios; no ingresar información identificatoria ni cargar estudios reales.')
-st.info('La herramienta compara criterios del ensayo MCI186-19 y presenta alertas según la formulación seleccionada. No indica, autoriza ni deniega tratamientos.')
-producto = st.selectbox('Presentación solicitada', list(PRODUCTOS))
-config = PRODUCTOS[producto]
-with st.expander('Fuentes y alcance'):
-    st.markdown(f'- [Ensayo MCI186-19]({ESTUDIO_URL})\n- [Referencia sobre ELA]({CLASIFICACION_URL})')
-    if config['fuente']:
-        st.markdown(f"- [Documento del producto seleccionado]({config['fuente']})")
-    else:
-        st.write('Prospecto aportado para revisión documental; verificar versión vigente en ANMAT antes de uso asistencial.')
-    st.caption('Los criterios del ensayo no son contraindicaciones. Las reglas farmacológicas deben validarse contra los prospectos vigentes antes del uso institucional.')
-
-st.header('1. Diagnóstico y evolución')
-diagnostico = st.selectbox('ELA definida o probable según criterios revisados de El Escorial', OPCIONES)
-edad = st.number_input('Edad (años)', min_value=0, max_value=120, value=None, step=1)
-meses = st.number_input('Meses desde el primer síntoma de ELA', min_value=0, max_value=600, value=None, step=1)
-cvf = st.number_input('Capacidad vital forzada (% del valor predicho)', min_value=0.0, max_value=200.0, value=None, step=1.0)
-st.caption('La progresión se calculará a partir de dos evaluaciones fechadas. El puntaje actual se obtiene de los 12 ítems de la sección 3.')
-
-st.header('2. Clasificación japonesa de gravedad')
-grados = {
-    'Sin dato': None,
-    'Grado 1 — Puede trabajar o realizar tareas domésticas': 1,
-    'Grado 2 — Vive de forma independiente, pero no puede trabajar': 2,
-    'Grado 3 — Requiere ayuda para alimentarse, usar el baño o desplazarse': 3,
-    'Grado 4 — Presenta insuficiencia respiratoria, dificultad para eliminar secreciones o disfagia': 4,
-    'Grado 5 — Utiliza traqueostomía, alimentación por sonda o ventilación por traqueostomía': 5,
-}
-grado = grados[st.selectbox('Grado de gravedad de la ELA', list(grados))]
-st.caption('Clasificación funcional ordinal; no se calcula sumando puntos.')
-
-st.header('3. ALSFRS-R')
-st.caption('Asignar 0 a 4 según descriptores validados. Para el ítem 5, utilizar la variante apropiada según la vía de alimentación.')
-items = ['Habla', 'Salivación', 'Deglución', 'Escritura', 'Cortar alimentos y manejar utensilios', 'Vestirse e higiene', 'Girarse en la cama y acomodar las sábanas', 'Caminar', 'Subir escaleras', 'Disnea', 'Ortopnea', 'Insuficiencia respiratoria']
-puntajes = [st.selectbox(f'{i}. {nombre}', ['Sin dato', 0, 1, 2, 3, 4], key=f'als_{i}') for i, nombre in enumerate(items, 1)]
-completa = all(isinstance(p, int) for p in puntajes)
-if completa:
-    st.metric('ALSFRS-R total', f'{sum(puntajes)}/48')
     st.write('**Puntaje mínimo por ítem:**', min(puntajes))
     respiratorio_concordante = all(p == 4 for p in puntajes[9:12])
     st.info('Tres ítems respiratorios con 4 puntos.' if respiratorio_concordante else 'Al menos un ítem respiratorio tiene menos de 4 puntos.')
 else:
     respiratorio_concordante = None
     st.info('Completar los 12 ítems para calcular la puntuación total.')
-
-st.subheader('3.1. Evolución temporal de ALSFRS-R')
-st.caption('Consignar la evaluación previa y las fechas de ambas mediciones. No se extrapola una progresión observada en otro intervalo a 12 semanas.')
-puntaje_previo = st.number_input('ALSFRS-R previa (0–48 puntos)', min_value=0, max_value=48, value=None, step=1)
-fecha_previa_disponible = st.checkbox('Dispongo de la fecha de la evaluación previa')
-fecha_previa = st.date_input('Fecha de ALSFRS-R previa', value=date.today(), max_value=date.today(), format='DD/MM/YYYY') if fecha_previa_disponible else None
-fecha_actual_disponible = st.checkbox('Dispongo de la fecha de la evaluación actual')
-fecha_actual = st.date_input('Fecha de ALSFRS-R actual', value=date.today(), max_value=date.today(), format='DD/MM/YYYY') if fecha_actual_disponible else None
-
-def evaluar_progresion(puntaje_previo, puntajes, fecha_previa, fecha_actual):
-    if puntaje_previo is None or not all(isinstance(p, int) for p in puntajes) or fecha_previa is None or fecha_actual is None:
-        return None, None, None, 'Faltan puntajes o fechas para evaluar la progresión.'
-    dias = (fecha_actual - fecha_previa).days
-    descenso = puntaje_previo - sum(puntajes)
-    if dias <= 0:
-        return None, descenso, dias, 'Las fechas son inconsistentes: la evaluación actual debe ser posterior a la previa.'
-    if descenso < 0:
-        return None, descenso, dias, 'El puntaje actual supera al previo: no se documenta descenso; revisar las mediciones.'
-    if dias != 84:
-        return None, descenso, dias, 'Intervalo diferente de 12 semanas (84 días): progresión documentada, pero concordancia temporal con el criterio del ensayo no verificable directamente.'
-    if 1 <= descenso <= 4:
-        return True, descenso, dias, 'Descenso de 1–4 puntos en 12 semanas: concordante con el criterio de progresión.'
-    return False, descenso, dias, 'El descenso en 12 semanas no está entre 1 y 4 puntos.'
-
-progresion_concordante, descenso_observado, dias_observados, mensaje_progresion = evaluar_progresion(puntaje_previo, puntajes, fecha_previa, fecha_actual)
-if descenso_observado is not None and dias_observados is not None and dias_observados > 0:
-    st.write(f'**Cambio observado:** {descenso_observado} puntos de descenso en {dias_observados} días ({dias_observados / 7:.1f} semanas).')
-st.info(mensaje_progresion)
 
 st.header('4. Evaluación clínica de seguridad')
 st.caption('El antecedente conocido de hipersensibilidad a edaravona o excipientes es una contraindicación. No se pregunta de rutina; si consta en la documentación, debe señalarse al auditor.')
@@ -130,23 +36,22 @@ if st.button('Evaluar', type='primary', use_container_width=True):
         'CVF ≥80 % del predicho': None if cvf is None else cvf >= 80,
         'ALSFRS-R ≥2 en todos los ítems': None if not completa else min(puntajes) >= 2,
         'ALSFRS-R respiratorio: 4 puntos en los tres ítems': respiratorio_concordante,
-        'Descenso ALSFRS-R de 1–4 puntos en 12 semanas': progresion_concordante,
         'Clasificación japonesa grado 1–2': None if grado is None else grado in (1, 2),
     }
-    st.subheader('6.1. Concordancia con MCI186-19')
+    st.subheader('6.1. Concordancia parcial con criterios seleccionados de MCI186-19')
     for nombre, resultado in criterios.items():
         mostrar_criterio(nombre, resultado)
     fallidos = [nombre for nombre, valor in criterios.items() if valor is False]
     faltantes = [nombre for nombre, valor in criterios.items() if valor is None]
     if fallidos:
-        st.warning('No concordante con todos los criterios seleccionados del ensayo; requiere valoración individual.')
+        st.warning('No concordante con todos los criterios clínicos seleccionados del ensayo; requiere valoración individual.')
     elif faltantes:
         st.warning('Concordancia indeterminada por información incompleta.')
     else:
-        st.success('Concordante con los criterios clínicos seleccionados del ensayo.')
+        st.success('Concordante con los criterios clínicos seleccionados que evalúa esta herramienta.')
     if faltantes:
         st.write('**Criterios pendientes:**', ', '.join(faltantes))
-    st.write('**Evaluación de progresión:**', mensaje_progresion)
+    st.caption('La velocidad de progresión ALSFRS-R fue un criterio de selección del MCI186-19, pero se excluye deliberadamente de este algoritmo de auditoría. Por ello, la concordancia indicada es parcial y no implica cumplimiento de todos los criterios del ensayo.')
 
     st.subheader('6.2. Seguridad por presentación')
     contra = []
