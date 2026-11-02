@@ -1,3 +1,67 @@
+import streamlit as st
+
+st.set_page_config(page_title='Auditoría ELA | Edaravona', layout='centered')
+
+ESTUDIO_URL = 'https://pubmed.ncbi.nlm.nih.gov/28522181/'
+CLASIFICACION_URL = 'https://www.ncbi.nlm.nih.gov/books/NBK542356/'
+PRODUCTOS = {
+    'Elavone® — intravenosa': {'renal': 'cualquiera', 'fuente': 'https://elea.com/uploads/PROSPECTOS/ELAVONE-Propecto.pdf'},
+    'Edaracut® — intravenosa': {'renal': 'cualquiera', 'fuente': 'https://boletin.anmat.gob.ar/junio_2024/Dispo_5555-24.pdf'},
+    'Edaranovag® — intravenosa': {'renal': 'cualquiera', 'fuente': None},
+    'Antixan® — intravenosa': {'renal': 'severa', 'fuente': 'https://bioprofarma-bago.com.ar/wp-content/uploads/2025/12/Prospecto-Antixan-21-07-21-1.pdf'},
+    'Antixan Oral® — suspensión oral': {'renal': 'precaucion', 'fuente': None},
+}
+OPCIONES = ['Sin dato', 'Sí', 'No']
+
+def si_no(valor):
+    return None if valor == 'Sin dato' else valor == 'Sí'
+
+def mostrar_criterio(nombre, resultado):
+    if resultado is None:
+        st.write(f'⚪ **{nombre}:** Sin dato')
+    elif resultado:
+        st.write(f'✅ **{nombre}:** Cumple')
+    else:
+        st.write(f'❌ **{nombre}:** No cumple')
+
+st.title('Auditoría médica | Edaravona en ELA')
+st.caption('Prototipo de apoyo a auditoría. Utilizar exclusivamente datos ficticios; no ingresar información identificatoria ni cargar estudios reales.')
+st.info('La herramienta compara criterios clínicos seleccionados del ensayo MCI186-19 (sin evaluar la velocidad de progresión) y presenta alertas según la formulación. No indica, autoriza ni deniega tratamientos.')
+producto = st.selectbox('Presentación solicitada', list(PRODUCTOS))
+config = PRODUCTOS[producto]
+with st.expander('Fuentes y alcance'):
+    st.markdown(f'- [Ensayo MCI186-19]({ESTUDIO_URL})\n- [Referencia sobre ELA]({CLASIFICACION_URL})')
+    if config['fuente']:
+        st.markdown(f"- [Documento del producto seleccionado]({config['fuente']})")
+    else:
+        st.write('Prospecto aportado para revisión documental; verificar versión vigente en ANMAT antes de uso asistencial.')
+    st.caption('Los criterios del ensayo no son contraindicaciones. Las reglas farmacológicas deben validarse contra los prospectos vigentes antes del uso institucional.')
+
+st.header('1. Diagnóstico y evolución')
+diagnostico = st.selectbox('ELA definida o probable según criterios revisados de El Escorial', OPCIONES)
+edad = st.number_input('Edad (años)', min_value=0, max_value=120, value=None, step=1)
+meses = st.number_input('Meses desde el primer síntoma de ELA', min_value=0, max_value=600, value=None, step=1)
+cvf = st.number_input('Capacidad vital forzada (% del valor predicho)', min_value=0.0, max_value=200.0, value=None, step=1.0)
+
+st.header('2. Clasificación japonesa de gravedad')
+grados = {
+    'Sin dato': None,
+    'Grado 1 — Puede trabajar o realizar tareas domésticas': 1,
+    'Grado 2 — Vive de forma independiente, pero no puede trabajar': 2,
+    'Grado 3 — Requiere ayuda para alimentarse, usar el baño o desplazarse': 3,
+    'Grado 4 — Presenta insuficiencia respiratoria, dificultad para eliminar secreciones o disfagia': 4,
+    'Grado 5 — Utiliza traqueostomía, alimentación por sonda o ventilación por traqueostomía': 5,
+}
+grado = grados[st.selectbox('Grado de gravedad de la ELA', list(grados))]
+st.caption('Clasificación funcional ordinal; no se calcula sumando puntos.')
+
+st.header('3. ALSFRS-R')
+st.caption('Asignar 0 a 4 según descriptores validados. Para el ítem 5, utilizar la variante apropiada según la vía de alimentación.')
+items = ['Habla', 'Salivación', 'Deglución', 'Escritura', 'Cortar alimentos y manejar utensilios', 'Vestirse e higiene', 'Girarse en la cama y acomodar las sábanas', 'Caminar', 'Subir escaleras', 'Disnea', 'Ortopnea', 'Insuficiencia respiratoria']
+puntajes = [st.selectbox(f'{i}. {nombre}', ['Sin dato', 0, 1, 2, 3, 4], key=f'als_{i}') for i, nombre in enumerate(items, 1)]
+completa = all(isinstance(p, int) for p in puntajes)
+if completa:
+    st.metric('ALSFRS-R total', f'{sum(puntajes)}/48')
     st.write('**Puntaje mínimo por ítem:**', min(puntajes))
     respiratorio_concordante = all(p == 4 for p in puntajes[9:12])
     st.info('Tres ítems respiratorios con 4 puntos.' if respiratorio_concordante else 'Al menos un ítem respiratorio tiene menos de 4 puntos.')
