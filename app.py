@@ -1,85 +1,3 @@
-import streamlit as st
-
-st.set_page_config(page_title='Auditoría ELA | Edaravona', layout='centered')
-
-ESTUDIO_URL = 'https://pubmed.ncbi.nlm.nih.gov/28522181/'
-CLASIFICACION_URL = 'https://www.ncbi.nlm.nih.gov/books/NBK542356/'
-PRODUCTOS = {
-    'Elavone® — intravenosa': {'renal': 'cualquiera', 'fuente': 'https://elea.com/uploads/PROSPECTOS/ELAVONE-Propecto.pdf'},
-    'Edaracut® — intravenosa': {'renal': 'cualquiera', 'fuente': 'https://boletin.anmat.gob.ar/junio_2024/Dispo_5555-24.pdf'},
-    'Edaranovag® — intravenosa': {'renal': 'cualquiera', 'fuente': None},
-    'Antixan® — intravenosa': {'renal': 'severa', 'fuente': 'https://bioprofarma-bago.com.ar/wp-content/uploads/2025/12/Prospecto-Antixan-21-07-21-1.pdf'},
-    'Antixan Oral® — suspensión oral': {'renal': 'precaucion', 'fuente': None},
-}
-OPCIONES = ['Sin dato', 'Sí', 'No']
-
-def si_no(valor):
-    return None if valor == 'Sin dato' else valor == 'Sí'
-
-def mostrar_criterio(nombre, resultado):
-    if resultado is None:
-        st.write(f'⚪ **{nombre}:** Sin dato')
-    elif resultado:
-        st.write(f'✅ **{nombre}:** Cumple')
-    else:
-        st.write(f'❌ **{nombre}:** No cumple')
-
-st.title('Auditoría médica | Edaravona en ELA')
-st.caption('Prototipo de apoyo a auditoría. Utilizar exclusivamente datos ficticios; no ingresar información identificatoria ni cargar estudios reales.')
-st.info('La herramienta compara criterios clínicos seleccionados del ensayo MCI186-19 (sin evaluar la velocidad de progresión) y presenta alertas según la formulación. No indica, autoriza ni deniega tratamientos.')
-producto = st.selectbox('Presentación solicitada', list(PRODUCTOS))
-config = PRODUCTOS[producto]
-with st.expander('Fuentes y alcance'):
-    st.markdown(f'- [Ensayo MCI186-19]({ESTUDIO_URL})\n- [Referencia sobre ELA]({CLASIFICACION_URL})')
-    if config['fuente']:
-        st.markdown(f"- [Documento del producto seleccionado]({config['fuente']})")
-    else:
-        st.write('Prospecto aportado para revisión documental; verificar versión vigente en ANMAT antes de uso asistencial.')
-    st.caption('Los criterios del ensayo no son contraindicaciones. Las reglas farmacológicas deben validarse contra los prospectos vigentes antes del uso institucional.')
-
-st.header('1. Diagnóstico y evolución')
-diagnostico = st.selectbox('ELA definida o probable según criterios revisados de El Escorial', OPCIONES)
-edad = st.number_input('Edad (años)', min_value=0, max_value=120, value=None, step=1)
-meses = st.number_input('Meses desde el primer síntoma de ELA', min_value=0, max_value=600, value=None, step=1)
-cvf = st.number_input('Capacidad vital forzada (% del valor predicho)', min_value=0.0, max_value=200.0, value=None, step=1.0)
-
-st.header('2. Clasificación japonesa de gravedad')
-grados = {
-    'Sin dato': None,
-    'Grado 1 — Puede trabajar o realizar tareas domésticas': 1,
-    'Grado 2 — Vive de forma independiente, pero no puede trabajar': 2,
-    'Grado 3 — Requiere ayuda para alimentarse, usar el baño o desplazarse': 3,
-    'Grado 4 — Presenta insuficiencia respiratoria, dificultad para eliminar secreciones o disfagia': 4,
-    'Grado 5 — Utiliza traqueostomía, alimentación por sonda o ventilación por traqueostomía': 5,
-}
-grado = grados[st.selectbox('Grado de gravedad de la ELA', list(grados))]
-st.caption('Clasificación funcional ordinal; no se calcula sumando puntos.')
-
-st.header('3. ALSFRS-R')
-st.caption('Asignar 0 a 4 según descriptores validados. Para el ítem 5, utilizar la variante apropiada según la vía de alimentación.')
-items = ['Habla', 'Salivación', 'Deglución', 'Escritura', 'Cortar alimentos y manejar utensilios', 'Vestirse e higiene', 'Girarse en la cama y acomodar las sábanas', 'Caminar', 'Subir escaleras', 'Disnea', 'Ortopnea', 'Insuficiencia respiratoria']
-puntajes = [st.selectbox(f'{i}. {nombre}', ['Sin dato', 0, 1, 2, 3, 4], key=f'als_{i}') for i, nombre in enumerate(items, 1)]
-completa = all(isinstance(p, int) for p in puntajes)
-if completa:
-    st.metric('ALSFRS-R total', f'{sum(puntajes)}/48')
-    st.write('**Puntaje mínimo por ítem:**', min(puntajes))
-    respiratorio_concordante = all(p == 4 for p in puntajes[9:12])
-    st.info('Tres ítems respiratorios con 4 puntos.' if respiratorio_concordante else 'Al menos un ítem respiratorio tiene menos de 4 puntos.')
-else:
-    respiratorio_concordante = None
-    st.info('Completar los 12 ítems para calcular la puntuación total.')
-
-st.header('4. Evaluación clínica de seguridad')
-st.caption('El antecedente conocido de hipersensibilidad a edaravona o excipientes es una contraindicación. No se pregunta de rutina; si consta en la documentación, debe señalarse al auditor.')
-renal = st.selectbox('Situación renal documentada', ['Sin dato', 'Sin insuficiencia renal documentada', 'Insuficiencia renal leve o moderada', 'Insuficiencia renal severa'])
-st.subheader('Precauciones')
-preguntas_precaucion = [
-    'Disfunción renal o deshidratación', 'Disfunción hepática',
-    'Trastorno cardíaco clínicamente relevante', 'Asma o sensibilidad a sulfitos',
-    'Infección activa clínicamente relevante', 'Alteración aguda de la conciencia',
-    'Embarazo o sospecha de embarazo', 'Lactancia',
-    'Edad avanzada con fragilidad clínica',
-    'Tratamiento antibiótico concomitante que requiere evaluación',
 ]
 precauciones = {pregunta: st.selectbox(pregunta, OPCIONES, key=f'prec_{i}') for i, pregunta in enumerate(preguntas_precaucion, 1)}
 st.subheader('Documentación de seguridad')
@@ -88,6 +6,10 @@ seguimiento = st.selectbox('Plan de monitoreo clínico y de laboratorio document
 st.caption('No se exige ingresar valores de laboratorio en este prototipo; deben revisarse en la documentación por el auditor.')
 
 st.header('5. Documentación clínica')
+st.caption('Para el prototipo utilizar exclusivamente identificadores y nombres ficticios.')
+paciente_ficticio = st.text_input('Nombre y apellido ficticios (para el PDF)')
+asociado_ficticio = st.text_input('Número de asociado ficticio (para el PDF)')
+auditor_ficticio = st.text_input('Identificación ficticia del auditor (para el PDF)')
 documentacion = st.selectbox('Informe neurológico y documentación clínica completos', OPCIONES)
 observaciones = st.text_area('Observaciones del auditor (sin datos identificatorios)')
 
@@ -115,9 +37,11 @@ if st.button('Evaluar', type='primary', use_container_width=True):
         st.success('Concordante con los criterios clínicos seleccionados que evalúa esta herramienta.')
     if faltantes:
         st.write('**Criterios pendientes:**', ', '.join(faltantes))
-    st.caption('La velocidad de progresión ALSFRS-R fue un criterio de selección del MCI186-19, pero se excluye deliberadamente de este algoritmo de auditoría. Por ello, la concordancia indicada es parcial y no implica cumplimiento de todos los criterios del ensayo.')
+    st.caption('La velocidad de progresión se informa separadamente, sin intervenir en la clasificación. La concordancia es parcial y no acredita todos los criterios del ensayo.')
 
-    st.subheader('6.2. Seguridad por presentación')
+    st.subheader('6.2. Progresión funcional observada')
+    st.write(progresion_texto)
+    st.subheader('6.3. Seguridad por presentación')
     contra = []
     prec_extra = []
     pendiente_renal = renal == 'Sin dato'
@@ -151,7 +75,7 @@ if st.button('Evaluar', type='primary', use_container_width=True):
     if not contra and not presentes and not pendiente_renal and not pendientes:
         st.success('Sin alertas identificadas en los campos de seguridad relevados; no descarta riesgos no consignados.')
 
-    st.subheader('6.3. Estado documental')
+    st.subheader('6.4. Estado documental')
     doc_pendientes = []
     if laboratorio != 'Sí':
         doc_pendientes.append('Laboratorios y evaluación basal')
@@ -164,8 +88,31 @@ if st.button('Evaluar', type='primary', use_container_width=True):
     else:
         st.success('Documentación declarada completa; su suficiencia debe comprobarse manualmente.')
 
-    st.subheader('6.4. Dictamen')
+    st.subheader('6.5. Dictamen')
     st.info('Pendiente de evaluación del auditor médico e interconsulta con neurología especializada en ELA. La herramienta no autoriza ni deniega cobertura.')
     if observaciones.strip():
         st.write('**Observaciones del auditor:**', observaciones)
     st.caption('Prototipo de validación con datos ficticios. Revisar versiones vigentes de prospectos y reglas antes de cualquier implementación institucional.')
+
+    # El informe se construye con los mismos valores y resultados de esta evaluación.
+    conclusion = ('No concordante con todos los criterios seleccionados; valoración individual requerida.' if fallidos else
+                  'Concordancia indeterminada por información incompleta.' if faltantes else
+                  'Concordante con los criterios seleccionados; no implica elegibilidad completa.')
+    registro = {
+        'id': 'ELA-' + uuid4().hex[:12].upper(),
+        'fecha': datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M:%S'),
+        'identificacion': {'Paciente': paciente_ficticio or 'No consignado', 'Número de asociado': asociado_ficticio or 'No consignado', 'Auditor': auditor_ficticio or 'No consignado', 'Presentación solicitada': producto},
+        'clinica': {'Diagnóstico': diagnostico, 'Edad': edad if edad is not None else 'Sin dato', 'Meses desde primer síntoma': meses if meses is not None else 'Sin dato', 'CVF (% predicho)': cvf if cvf is not None else 'Sin dato', 'Grado japonés': grado if grado is not None else 'Sin dato'},
+        'als': {**{f'{i}. {nombre}': puntajes[i-1] for i,nombre in enumerate(items,1)}, 'Total': f'{sum(puntajes)}/48' if completa else 'No calculable'},
+        'criterios': criterios, 'conclusion': conclusion, 'progresion': progresion_texto,
+        'seguridad': {'Situación renal': renal, 'Alertas de contraindicación': '; '.join(contra) or 'Ninguna identificada en las reglas evaluadas', 'Precauciones presentes': '; '.join(presentes) or 'Ninguna declarada', 'Precauciones sin dato': '; '.join(pendientes) or 'Ninguna', 'Situación renal pendiente': 'Sí' if pendiente_renal else 'No', 'Laboratorios basales': laboratorio, 'Plan de monitoreo': seguimiento, 'Documentación clínica': documentacion, **precauciones},
+        'observaciones': observaciones, 'fuente': config['fuente']
+    }
+    st.session_state['informe_ela'] = crear_pdf(registro)
+    st.session_state['informe_ela_id'] = registro['id']
+
+if 'informe_ela' in st.session_state:
+    st.subheader('7. Informe descargable para interconsulta')
+    st.warning('Si modificás cualquier dato, presioná «Evaluar» nuevamente antes de descargar. El informe refleja la última evaluación ejecutada.')
+    st.download_button('Descargar informe PDF', data=st.session_state['informe_ela'], file_name=st.session_state['informe_ela_id'] + '.pdf', mime='application/pdf', use_container_width=True)
+    st.caption('El PDF contiene campos para dictamen manuscrito del especialista. No guarda historial ni valida identidad o firma. Usar solo datos ficticios hasta implementar seguridad institucional.')
